@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
 	
 
 #define UNUSED(VAR) (void)(VAR)
@@ -43,6 +45,7 @@ hstack_t stack_new(void)
     3. return result
     */
     static hstack_t nextId = 0;
+    if (stackControl.numStacks == 0) nextId = 0;
     myStack *newStack = (myStack *)malloc(sizeof(myStack));
     if (newStack != NULL) {
         newStack->stackSize = 0;
@@ -56,8 +59,10 @@ hstack_t stack_new(void)
 
             stackControl.lastStack = newStackBox;
             stackControl.numStacks++;
-
-            return nextId++;  //all good
+            nextId++;  //all good
+            printf("stack created - id=%d \r\n", nextId-1);
+            return (nextId - 1);
+            
         } else { //container memory allocation fail
             free(newStack);
         }
@@ -73,18 +78,21 @@ void stack_free(const hstack_t hstack)
     // if (stack_valid_handler(hstack)) {
     //     myStack * doomedStack = 
     // }
-    if (hstack < 0) return;
-    stackElem *tmpElem;
+    if ((hstack < 0) || (stackControl.numStacks == 0)) {
+        return;}
+    stackElem *tmpElem = NULL;
     stackListElem *tmp = stackControl.lastStack;
     stackListElem *doomed = NULL;
+    if (tmp == NULL) return;
     if (tmp->id == hstack) { //finding and bypassing doomed stack
         stackControl.lastStack = stackControl.lastStack->nextElem;
         stackControl.numStacks--;
         doomed = tmp;
     } else {
+        if (tmp->nextElem == NULL) return;
         for (unsigned int i = 0; i < stackControl.numStacks; ++i) {
             if (tmp->nextElem->id == hstack) {
-                doomed = tmp;
+                doomed = tmp->nextElem;
                 break;
             }
             if (tmp->nextElem) tmp = tmp->nextElem;
@@ -99,9 +107,11 @@ void stack_free(const hstack_t hstack)
             free(doomed->thisStack->top);
             doomed->thisStack->top = tmpElem;
         }
+        printf("stack doomed - id=%d \r\n", doomed->id);
         free(doomed->thisStack);
         free(doomed);
     }
+    
 
     // UNUSED(hstack);
 }
@@ -111,14 +121,15 @@ int stack_valid_handler(const hstack_t hstack)
     /*
     search in stack list if found - return 1 else -1
     */
-   if (hstack < 0) return -1;
+    if (hstack < 0) return 1;
     stackListElem *tmp = stackControl.lastStack;
+    if (tmp == NULL) return 1;
     for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
-        if (tmp->id == hstack) return 1;
+        if (tmp->id == hstack) return 0;
         if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
     }
     // UNUSED(hstack);
-    return -1;
+    return 1;
 }
 
 unsigned int stack_size(const hstack_t hstack)
@@ -126,6 +137,7 @@ unsigned int stack_size(const hstack_t hstack)
     /*
     search in stack list 
     */
+   if (hstack < 0) return 0;
     stackListElem *tmp = stackControl.lastStack;
     for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
         if (tmp->id == hstack) return tmp->thisStack->stackSize;
@@ -138,7 +150,7 @@ unsigned int stack_size(const hstack_t hstack)
 void stack_push(const hstack_t hstack, const void* data_in, const unsigned int size)
 {
     if ((data_in == NULL) || (size == 0)) return;
-    if (stack_valid_handler(hstack) == 1) {
+    if (stack_valid_handler(hstack) == 0) {
         void *tmp_data = malloc(size);
         stackListElem *tmp = stackControl.lastStack;
         for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
@@ -162,12 +174,13 @@ unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int
 {
     unsigned int res = 0;
     if (data_out == NULL) return 0;
-    if (stack_valid_handler(hstack) == 1) {
+    if (stack_valid_handler(hstack) == 0) {
         stackListElem *tmp = stackControl.lastStack;
         for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
             if (tmp->id == hstack) break;
             if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
         }
+        if (tmp->thisStack->stackSize == 0) return res;
         memcpy(tmp->thisStack->top->data, data_out, tmp->thisStack->top->size);
         stackElem *doomed = tmp->thisStack->top;
         tmp->thisStack->stackSize--;
