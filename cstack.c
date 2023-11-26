@@ -163,6 +163,7 @@ void stack_push(const hstack_t hstack, const void* data_in, const unsigned int s
         new_element->size = size;
         new_element->prevElem = tmp->thisStack->top;
         tmp->thisStack->top = new_element;
+        tmp->thisStack->stackSize++;
         
     }
     // UNUSED(hstack);
@@ -174,6 +175,7 @@ unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int
 {
     unsigned int res = 0;
     if (data_out == NULL) return 0;
+    if (data_out == NULL) return 0;
     if (stack_valid_handler(hstack) == 0) {
         stackListElem *tmp = stackControl.lastStack;
         for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
@@ -181,7 +183,8 @@ unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int
             if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
         }
         if (tmp->thisStack->stackSize == 0) return res;
-        memcpy(tmp->thisStack->top->data, data_out, tmp->thisStack->top->size);
+        if (tmp->thisStack->top->size != size) return res;
+        memcpy(data_out, tmp->thisStack->top->data,  tmp->thisStack->top->size);
         stackElem *doomed = tmp->thisStack->top;
         tmp->thisStack->stackSize--;
         tmp->thisStack->top = tmp->thisStack->top->prevElem;
