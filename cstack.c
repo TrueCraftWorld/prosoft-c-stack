@@ -34,16 +34,22 @@ typedef struct stackList {
 
 static stackList stackControl = {0, NULL}; 
 
+stackListElem *getStackP (const hstack_t hstack) {
+    stackListElem *tmp = NULL; 
+    if ((hstack >= 0) && (stackControl.numStacks > 0)) {
+        tmp = stackControl.lastStack;
+        for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
+            if (tmp->id == hstack) {
+                return tmp;
+            }
+            if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
+        }
+    }
+    return NULL; //if we return here - no such stack
+}
+
 hstack_t stack_new(void)
 {
-    /*
-    creation steps
-    1. check if this the first stack
-        1.1 if so 
-    0. allocate memory
-        0.1 check for NULL
-    3. return result
-    */
     static hstack_t nextId = 0;
     if (stackControl.numStacks == 0) nextId = 0;
     myStack *newStack = (myStack *)malloc(sizeof(myStack));
@@ -59,10 +65,8 @@ hstack_t stack_new(void)
 
             stackControl.lastStack = newStackBox;
             stackControl.numStacks++;
-            nextId++;  //all good
-            printf("stack created - id=%d \r\n", nextId-1);
-            return (nextId - 1);
-            
+            printf("stack made - id=%d \r\n", newStackBox->id);
+            return nextId++;  //all good
         } else { //container memory allocation fail
             free(newStack);
         }
@@ -72,27 +76,23 @@ hstack_t stack_new(void)
 
 void stack_free(const hstack_t hstack)
 {
-    /*
-    search in stack list than free found stack structure
-    */
-    // if (stack_valid_handler(hstack)) {
-    //     myStack * doomedStack = 
-    // }
-    if ((hstack < 0) || (stackControl.numStacks == 0)) {
-        return;}
+   if (stack_valid_handler(hstack)) return;
     stackElem *tmpElem = NULL;
     stackListElem *tmp = stackControl.lastStack;
     stackListElem *doomed = NULL;
     if (tmp == NULL) return;
+    
     if (tmp->id == hstack) { //finding and bypassing doomed stack
         stackControl.lastStack = stackControl.lastStack->nextElem;
-        stackControl.numStacks--;
         doomed = tmp;
     } else {
         if (tmp->nextElem == NULL) return;
-        for (unsigned int i = 0; i < stackControl.numStacks; ++i) {
+        for (unsigned int i = 0; i < stackControl.numStacks-1; ++i) {
             if (tmp->nextElem->id == hstack) {
+                
                 doomed = tmp->nextElem;
+                if (tmp->nextElem) tmp->nextElem = tmp->nextElem->nextElem;
+                // stackControl.numStacks--;
                 break;
             }
             if (tmp->nextElem) tmp = tmp->nextElem;
@@ -110,65 +110,41 @@ void stack_free(const hstack_t hstack)
         printf("stack doomed - id=%d \r\n", doomed->id);
         free(doomed->thisStack);
         free(doomed);
+        stackControl.numStacks--;
     }
-    
-
-    // UNUSED(hstack);
 }
 
 int stack_valid_handler(const hstack_t hstack)
 {
-    /*
-    search in stack list if found - return 1 else -1
-    */
-    if (hstack < 0) return 1;
-    stackListElem *tmp = stackControl.lastStack;
-    if (tmp == NULL) return 1;
-    for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
-        if (tmp->id == hstack) return 0;
-        if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
+    if (getStackP(hstack) != NULL) {
+        return 0;
+    } else {
+        return 1;
     }
-    // UNUSED(hstack);
-    return 1;
 }
 
 unsigned int stack_size(const hstack_t hstack)
 {
-    /*
-    search in stack list 
-    */
-   if (hstack < 0) return 0;
-    stackListElem *tmp = stackControl.lastStack;
-    for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
-        if (tmp->id == hstack) return tmp->thisStack->stackSize;
-        if (tmp->nextElem != NULL) tmp = tmp->nextElem; //just in case smth went wrong
-    }
-//    UNUSED(hstack);
-    return 0; //is it ok to say that non-existing stack has 0 size?
+    if (hstack < 0) return 0;
+    stackListElem *tmp = getStackP(hstack);
+    if (tmp == NULL) return 0;
+    else return tmp->thisStack->stackSize;
 }
 
 void stack_push(const hstack_t hstack, const void* data_in, const unsigned int size)
 {
     if ((data_in == NULL) || (size == 0)) return;
-    if (stack_valid_handler(hstack) == 0) {
-        void *tmp_data = malloc(size);
-        stackListElem *tmp = stackControl.lastStack;
-        for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
-            if (tmp->id == hstack) break;
-            if (tmp->nextElem != NULL) tmp = tmp->nextElem; //just in case smth went wrong
-        }
-        stackElem *new_element = (stackElem *)malloc(sizeof(stackElem));
-        new_element->data = tmp_data;
-        memcpy(new_element->data, data_in, size);
-        new_element->size = size;
-        new_element->prevElem = tmp->thisStack->top;
-        tmp->thisStack->top = new_element;
-        tmp->thisStack->stackSize++;
-        
-    }
-    // UNUSED(hstack);
-    // UNUSED(data_in);
-    // UNUSED(size);
+    stackListElem *tmp = getStackP(hstack);
+    if (tmp == NULL) return;
+
+    void *tmp_data = malloc(size);
+    stackElem *new_element = (stackElem *)malloc(sizeof(stackElem));
+    new_element->data = tmp_data;
+    memcpy(new_element->data, data_in, size);
+    new_element->size = size;
+    new_element->prevElem = tmp->thisStack->top;
+    tmp->thisStack->top = new_element;
+    tmp->thisStack->stackSize++;
 }
 
 unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int size)
@@ -176,27 +152,21 @@ unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int
     unsigned int res = 0;
     if (data_out == NULL) return 0;
     if (data_out == NULL) return 0;
-    if (stack_valid_handler(hstack) == 0) {
-        stackListElem *tmp = stackControl.lastStack;
-        for (unsigned int i = 0; i < stackControl.numStacks; ++i) { //makes sense to check only amount of existing stacks
-            if (tmp->id == hstack) break;
-            if (tmp->nextElem) tmp = tmp->nextElem; //just in case smth went wrong
-        }
-        if (tmp->thisStack->stackSize == 0) return res;
-        if (tmp->thisStack->top->size != size) return res;
-        memcpy(data_out, tmp->thisStack->top->data,  tmp->thisStack->top->size);
-        stackElem *doomed = tmp->thisStack->top;
-        tmp->thisStack->stackSize--;
-        tmp->thisStack->top = tmp->thisStack->top->prevElem;
-        res = doomed->size;
-        free(doomed->data);
-        free(doomed);
-        return res;
-    }
+
+    stackListElem *tmp = getStackP(hstack);
+    if ((tmp == NULL) || 
+        (tmp->thisStack->stackSize == 0) || 
+        (tmp->thisStack->top->size != size))return res;
+
+    stackElem *doomed = tmp->thisStack->top;
+    memcpy(data_out, tmp->thisStack->top->data,  tmp->thisStack->top->size);
     
-    // UNUSED(hstack);
-    // UNUSED(data_out);
-    UNUSED(size);
+    tmp->thisStack->stackSize--;
+    tmp->thisStack->top = tmp->thisStack->top->prevElem;
+    res = doomed->size;
+    
+    free(doomed->data);
+    free(doomed);
     return res;
 }
 
