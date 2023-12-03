@@ -10,18 +10,18 @@
 
 /*
 So it's linked lists of stacks(which are just not fully functional linked lists themselves)
-in theory only memory and max uint64_t limits amount of stack and their deep
+in theory only memory and max uint64_t limit amount of stacks and their deep
 */
 
 typedef struct stackElem {    //1 stack frame 
     struct stackElem * prevElem;    // this element was pushed before this one 
     void * data;                    // pointer to user data
-    uint64_t size;                  // user data size in bytes 
+    size_t size;                  // user data size in bytes 
 } stackElem;
 
 typedef struct myStack {    //1 stack 
     stackElem * top;        //highest element pointer
-    uint64_t stackSize;     //this is amount of elements in this stack
+    size_t stackSize;     //this is amount of elements in this stack
 } myStack;
 
 typedef struct stackListElem {      //stack container
@@ -31,7 +31,7 @@ typedef struct stackListElem {      //stack container
 } stackListElem;
 
 typedef struct stackList {   //linked list of created stacks (id's are sorted highest being in the top)
-    uint64_t numStacks;      //number of created stacks
+    size_t numStacks;      //number of created stacks
     stackListElem *lastStack;//last created stack (with highest id)
 } stackList;
 
@@ -40,12 +40,12 @@ static stackList stackControl = {0, NULL}; //global entry point
 
 
 /*
-@brief - function to get stack pointe
-@param - hstack_t hstack, id of wanted stack
-@retval - stackListElem * pointer to ctack container, returns NUL if no such stack
+@brief function to get stack pointe
+@param hstack_t hstack, id of wanted stack
+@return stackListElem * pointer to ctack container, returns NUL if no such stack
 @details - also can be used to check stack id vor validity
 */
-stackListElem *getStackP (const hstack_t hstack) { 
+static stackListElem *getStackP (const hstack_t hstack) { 
     stackListElem *tmp = NULL; 
     if ((hstack >= 0) && (stackControl.numStacks > 0)) {
         tmp = stackControl.lastStack;
@@ -62,7 +62,7 @@ stackListElem *getStackP (const hstack_t hstack) {
 hstack_t stack_new(void)
 {
     static hstack_t nextId = 0;
-    if (stackControl.numStacks == 0) nextId = 0; //this is for the test to pass witout it id's would not repeat themselves in 1 program run
+    // if (stackControl.numStacks == 0) nextId = 0; //this is for the test to pass witout it id's would not repeat themselves in 1 program run
     myStack *newStack = (myStack *)malloc(sizeof(myStack)); //memory for stack
     if (newStack != NULL) {
         newStack->stackSize = 0;
@@ -93,30 +93,35 @@ void stack_free(const hstack_t hstack)
     if (tmp == NULL) return;
 
     //finding and bypassing doomed stack
-    if (tmp->id == hstack) { //special case - removing nearest stcak
+    if (tmp->id == hstack) { //special case - removing nearest stack
         stackControl.lastStack = stackControl.lastStack->nextElem;
         doomed = tmp;
     } else { //other cases
-        if (tmp->nextElem == NULL) return;
         for (unsigned int i = 0; i < stackControl.numStacks-1; ++i) {
-            if (tmp->nextElem->id == hstack) {
-                
-                doomed = tmp->nextElem;
-                if (tmp->nextElem) tmp->nextElem = tmp->nextElem->nextElem;
+            if (tmp->nextElem) {
+                if (tmp->nextElem->id == hstack) {
+                    
+                    doomed = tmp->nextElem;
+                    tmp->nextElem = tmp->nextElem->nextElem;
+                    break;
+                }
+                tmp = tmp->nextElem;
+            } else {
                 break;
             }
-            if (tmp->nextElem) tmp = tmp->nextElem;
         }
     }
 
     if (doomed) { //freeing all memory used in doomed stack
         stackElem *tmpElem = NULL;
-        for (unsigned int i=0; i < doomed->thisStack->stackSize; ++i) { //every frame with user data
-            if (doomed->thisStack->top->prevElem) 
-                tmpElem = doomed->thisStack->top->prevElem;
-            free(doomed->thisStack->top->data); 
-            free(doomed->thisStack->top); 
-            doomed->thisStack->top = tmpElem;
+        if (doomed->thisStack->top) {
+            for (unsigned int i=0; i < doomed->thisStack->stackSize; ++i) { //every frame with user data
+                if (doomed->thisStack->top->prevElem) 
+                    tmpElem = doomed->thisStack->top->prevElem;
+                free(doomed->thisStack->top->data); 
+                free(doomed->thisStack->top); 
+                doomed->thisStack->top = tmpElem;
+            }
         }
         free(doomed->thisStack); //then stack
         free(doomed);               //and container
@@ -160,15 +165,14 @@ unsigned int stack_pop(const hstack_t hstack, void* data_out, const unsigned int
 {
     unsigned int res = 0;
     if (data_out == NULL) return 0;
-    if (data_out == NULL) return 0;
 
     stackListElem *tmp = getStackP(hstack);
     if ((tmp == NULL) || 
         (tmp->thisStack->stackSize == 0) || 
-        (tmp->thisStack->top->size != size)) return res; //in case of incorrect params - quit before we mess up memory
+        (tmp->thisStack->top->size > size)) return res; //in case of incorrect params - quit before we mess up memory
 
     stackElem *doomed = tmp->thisStack->top;
-    memcpy(data_out, tmp->thisStack->top->data,  tmp->thisStack->top->size); //return stored dta
+    memcpy(data_out, tmp->thisStack->top->data,  tmp->thisStack->top->size); //return stored data
     
     tmp->thisStack->stackSize--;
     tmp->thisStack->top = tmp->thisStack->top->prevElem;
